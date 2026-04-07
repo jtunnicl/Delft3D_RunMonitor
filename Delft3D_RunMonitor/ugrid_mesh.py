@@ -65,6 +65,31 @@ class UGridMesh:
             f")"
         )
     
+    def to_pyvista(self):
+        """
+        Convert mesh to a PyVista PolyData object.
+        """
+        # Points (N, 3)
+        points = np.column_stack((self.x, self.y, self.z))
+
+        # Build faces in VTK format:
+        # [npts, p0, p1, ..., npts, ...]
+        faces_list = []
+        for face in self.face_nodes:
+            valid = face[face >= 0]  # remove fill values
+            if len(valid) < 3:
+                continue
+            faces_list.append(np.concatenate(([len(valid)], valid)))
+
+        if len(faces_list) == 0:
+            raise ValueError("No valid faces found")
+
+        faces = np.hstack(faces_list)
+
+        mesh = pv.PolyData(points, faces)
+        return mesh
+
+    
     def plot(self, show_edges=True):
         mesh = self.to_pyvista()
         plotter = pv.Plotter()
