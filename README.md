@@ -1,17 +1,44 @@
 # Delft3D-FM Multi-Domain Result Analyzer
 
-A MATLAB-based tool for post-processing, aggregating, and visualizing multi-domain results from Delft3D-FM (Flexible Mesh) simulations. 
+A Python-based tool for post-processing, aggregating, and visualizing multi-domain results from Delft3D-FM (Flexible Mesh) simulations. 
 This script handles the reconstruction of partitioned map files into a single global domain for spatial analysis and animation.
-It is used to derive a graphical picture of model run progress while Delft3D-FM is executing on NeSI supercomputing infrastructure.
+It is used to derive a graphical picture of model run progress while Delft3D-FM is executing on REANNZ supercomputing infrastructure.
+
+## Installation
+
+We recommend to create a Python virtual environment
+```
+python -m venv venv
+source venv/bin/activate
+```
+
+To build the package:
+```
+pip install -e .
+```
+This will also install dependencies.
+
+Run some examples, for instance
+```
+python examples/multiple_partitions.py -m data/FlowFM_*_map.nc \
+                                       -v mesh2d_waterdepth \
+                                       -t 3
+```
+This will display the water depth at time index 3. Type 
+```
+python examples/multiple_partitions.py -h
+```
+to see the list of options.
+
 
 ## Features
 
 - **Multi-Domain Aggregation:** Automatically identifies and merges results from multiple partition files (`FlowFM_0000_map.nc`, `FlowFM_0001_map.nc`, etc.).
-- **Sediment Transport Analysis:** Converts cumulative bedload sediment transport (kg) into instantaneous volumetric flux ($m^3/m/s$).
+- **Sediment Transport Analysis:** Converts cumulative bedload sediment transport (kg) into instantaneous volumetric flux ($m^3/m/s$). TO DO 
 - **Morphological Change (DoD):** Calculates "Dem of Difference" (DoD) to visualize erosion and deposition patterns over time.
-- **Automated Animation:** Generates high-quality synchronized videos of water depth and bed level changes.
-- **Spatial Binning:** Includes logic for longitudinal mass balance using GeoTIFF-based spatial bins.
-- **3D Export:** Exports final bed geometry as an STL file (with coordinate offsets) for 3D modeling in Blender, Unity, or Rhino.
+- **Automated Animation:** Generates high-quality synchronized videos of water depth and bed level changes. TO DO 
+- **Spatial Binning:** Includes logic for longitudinal mass balance using GeoTIFF-based spatial bins.  TO DO 
+- **3D Export:** Exports final bed geometry as an STL file (with coordinate offsets) for 3D modeling in Blender, Unity, or Rhino.  TO DO 
 
 ## File Requirements
 
