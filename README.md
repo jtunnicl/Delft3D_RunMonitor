@@ -20,11 +20,11 @@ This will also install dependencies.
 
 Run some examples, for instance
 ```
-python examples/multiple_partitions.py -m data/FlowFM_*_map.nc \
+python examples/multiple_partitions.py -m data/FlowFM_\*_map.nc \
                                        -v mesh2d_waterdepth \
                                        -t 3
 ```
-This will display the water depth at time index 3. Type 
+This will display the water depth at time index 3. Note the backslash `\*`. Type 
 ```
 python examples/multiple_partitions.py -h
 ```
