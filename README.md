@@ -18,6 +18,8 @@ pip install -e .
 ```
 This will also install dependencies.
 
+The software relies on libGL. On mahuika: `module load Mesa`.
+
 Run some examples, for instance
 ```
 python examples/multiple_partitions.py -m data/FlowFM_\*_map.nc \
