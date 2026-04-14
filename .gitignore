@@ -1,0 +1,9 @@
+# .gitignore
+# matlab autosave files.
+*.asv
+# rubbish
+.venv*
+.vscode*
+__*
+*.png
+*.out
