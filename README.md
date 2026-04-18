@@ -4,6 +4,8 @@ A Python-based tool for post-processing, aggregating, and visualizing multi-doma
 This script handles the reconstruction of partitioned map files into a single global domain for spatial analysis and animation.
 It is used to derive a graphical picture of model run progress while Delft3D-FM is executing on REANNZ supercomputing infrastructure.
 
+The repository also contains a frozen MATLAB workflow in `mddPlot.m`. That script usable, but new feature development should happen in Python.
+
 ## Installation
 
 We recommend to create a Python virtual environment
@@ -47,6 +49,23 @@ The setting of `DISPLAY=` to empty prevents an OpenGL error on mahuika.
 - **Automated Animation:** Generates high-quality synchronized videos of water depth and bed level changes. TO DO 
 - **Spatial Binning:** Includes logic for longitudinal mass balance using GeoTIFF-based spatial bins.  TO DO 
 - **3D Export:** Exports final bed geometry as an STL file (with coordinate offsets) for 3D modeling in Blender, Unity, or Rhino.  TO DO 
+
+## MATLAB Workflow
+
+The MATLAB entrypoint is intended as a stable handoff tool rather than an actively developed surface.
+
+- Primary function: `mddPlot(caseFolder, Name=Value)`
+- Example runner: `runmddPlot.m`
+- Status and full usage notes: `MATLAB.md`
+
+The current MATLAB workflow supports:
+
+- automatic discovery of `*_his.nc`, `*_map.nc`, and `*_net.nc` files beneath a case folder
+- water-depth and DoD map rendering
+- discharge and bedload history panels
+- optional AVI, PNG, and STL export
+
+The current MATLAB workflow does not attempt to preserve incomplete prototype features such as raster-bin mass balance or cross-section overlays. Those are documented explicitly rather than left partially implemented.
 
 ## File Requirements
 
