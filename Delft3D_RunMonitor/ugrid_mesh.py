@@ -5,6 +5,9 @@ import time
 
 
 class UGridMesh:
+    """
+    A class to read a single partition of data stored on a UGrid mesh
+    """
 
     def __init__(self, filename):
 
@@ -63,9 +66,12 @@ class UGridMesh:
                 self.face_nodes
             )
 
-    def _readField(self, varname, time_index):
+    def _readField(self, varname: str, time_index: int):
         """
         Read the field values at time time_index from the NetCDF file
+
+        :param varname: variable name
+        :param time_index: time index
         """
         return self.nc.variables[varname][time_index, :]
     
@@ -94,7 +100,10 @@ class UGridMesh:
     
     def to_pyvista(self, varname, time_index):
         """
-        Convert mesh to a PyVista PolyData object.
+        Convert mesh to a PyVista PolyData object
+
+        :param varname: variable name
+        :param time_index: time index
         """
         polydata = self._buildVTKPolyData()
 
@@ -111,9 +120,15 @@ class UGridMesh:
 
         return polydata
     
-    def plot(self, varname, time_index, cmap='plasma', clim=None, show_edges=False):
+    def plot(self, varname: str, time_index: int, cmap: str='plasma', clim=None, show_edges: bool=False):
         """
         Plot field at time index
+
+        :param varname: variable name
+        :param time_index: time index
+        :param cmap: color map name
+        :param clim: (cmin, cmax) tuple. cmin and cmax are the min/max values of the color map
+        :param show_edges: True if the edges of the triangular mesh should be shown
         """
         polydata = self.to_pyvista(varname, time_index)
         plotter = pv.Plotter()
@@ -123,6 +138,10 @@ class UGridMesh:
     def movie(self, varname, moviefile="animation.mp4", clim=None):
         """
         Make movie
+
+        :param varname: variable name
+        :param moviefile: output file
+        :param clim: (cmin, cmax) tuple. cmin and cmax are the min/max values of the color map
         """
         tic = time.time()
         pv.OFF_SCREEN = True
