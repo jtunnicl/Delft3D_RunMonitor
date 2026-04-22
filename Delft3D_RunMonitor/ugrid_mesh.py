@@ -11,6 +11,12 @@ class UGridMesh:
 
     def __init__(self, filename):
 
+        """
+        Constructor
+
+        :param filename: NetCDF file name storing the mesh and data (map file)
+        """
+
         # Data containers
         self.time = None
         self.x = None
@@ -66,7 +72,7 @@ class UGridMesh:
                 self.face_nodes
             )
 
-    def _readField(self, varname: str, time_index: int):
+    def readField(self, varname: str, time_index: int):
         """
         Read the field values at time time_index from the NetCDF file
 
@@ -109,7 +115,7 @@ class UGridMesh:
 
         # Read and add the fields
         v = self.nc.variables[varname]
-        data = self._readField(varname, time_index)
+        data = self.readField(varname, time_index)
         location = getattr(v, 'location', 'node')
         if location == 'node':
             polydata.point_data[varname] = data
