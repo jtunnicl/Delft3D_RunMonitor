@@ -84,6 +84,7 @@ class MultiUGridMesh(UGridMesh):
         for time_index in range(t0, t1):
             print(f'time index {time_index}')
             plotter.clear()
+            # read and set the field values
             data_ptr[:] = self.readField(varname=varname, time_index=time_index)
             plotter.add_mesh(polydata, scalars=varname, clim=clim)
             plotter.write_frame()
