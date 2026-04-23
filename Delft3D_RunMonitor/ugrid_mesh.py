@@ -104,25 +104,27 @@ class UGridMesh:
 
         return pv.PolyData(points, faces)
     
-    def to_pyvista(self, varname, time_index):
+    def to_pyvista(self, varname=None, time_index=None):
         """
         Convert mesh to a PyVista PolyData object
 
         :param varname: variable name
         :param time_index: time index
         """
+
         polydata = self._buildVTKPolyData()
 
-        # Read and add the fields
-        v = self.nc.variables[varname]
-        data = self.readField(varname, time_index)
-        location = getattr(v, 'location', 'node')
-        if location == 'node':
-            polydata.point_data[varname] = data
-        elif location == 'face':
-            polydata.cell_data[varname] = data
-        else:
-            raise ValueError(f"ERROR: location {v['location']} is not supported")
+        if varname:
+            # Read and add the fields
+            v = self.nc.variables[varname]
+            data = self.readField(varname, time_index)
+            location = getattr(v, 'location', 'node')
+            if location == 'node':
+                polydata.point_data[varname] = data
+            elif location == 'face':
+                polydata.cell_data[varname] = data
+            else:
+                raise ValueError(f"ERROR: location {v['location']} is not supported")
 
         return polydata
     

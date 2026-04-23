@@ -32,7 +32,7 @@ class MultiUGridMesh(UGridMesh):
         return np.concatenate(data_list)
 
 
-    def to_pyvista(self, varname, time_index):
+    def to_pyvista(self, varname=None, time_index=None):
         """
         Convert mesh to a PyVista PolyData object
 
