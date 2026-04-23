@@ -6,12 +6,15 @@ import time
 
 
 class MultiUGridMesh(UGridMesh):
+    """
+    A class that combines data and grid stored in mutiple partitions
+    """
 
     def __init__(self, filenames):
         """
-        Parameters
-        ----------
-        filenames : list of map filenames
+        Constructor
+
+        :param filenames: list of map filenames
         """
         self.meshes = [UGridMesh(fn) for fn in filenames]
         self.time = 0
@@ -20,18 +23,23 @@ class MultiUGridMesh(UGridMesh):
 
     def to_pyvista(self, varname, time_index):
         """
-        Convert mesh to a PyVista PolyData object.
+        Convert mesh to a PyVista PolyData object
+
+        :param varname: variable name
+        :param time_index: time index
         """
         polydata = pv.merge([m.to_pyvista(varname, time_index) for m in self.meshes])
         return polydata
 
-    def movie(self, varname, moviefile="animation.mp4", t0=0, t1=-1, clim=None):
+    def movie(self, varname, moviefile: str="animation.mp4", t0: int=0, t1: int=-1, clim=None):
         """
         Make movie
-        : varname: variable name
-        : moviefile: output file
-        : t0: first time index
-        : t1: one beyond last time index
+        
+        :param varname: variable name
+        :param moviefile: output file
+        :param t0: first time index
+        :param t1: one beyond last time index
+        :param clim: (cmin, cmax) tuple. cmin and cmax are the min/max values of the color map
         """
         # We could just call movie from UGridMesh but this implementation is 2-3 times faster
 
