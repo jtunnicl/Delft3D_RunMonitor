@@ -1,4 +1,4 @@
-from Delft3D_RunMonitor.multi_ugrid_mesh import MultiUGridMesh
+from Delft3D_RunMonitor import MultiUGridMesh
 import defopt
 from glob import glob
 

@@ -21,7 +21,18 @@ class MultiUGridMesh(UGridMesh):
         if len(self.meshes) > 0:
             self.time = self.meshes[0].time
 
-    def to_pyvista(self, varname, time_index):
+    def readField(self, varname: str, time_index: int):
+        """
+        Read the field values at time time_index from the NetCDF file
+
+        :param varname: variable name
+        :param time_index: time index
+        """
+        data_list = [m.readField(varname=varname, time_index=time_index) for m in self.meshes]
+        return np.concatenate(data_list)
+
+
+    def to_pyvista(self, varname=None, time_index=None):
         """
         Convert mesh to a PyVista PolyData object
 
@@ -49,14 +60,15 @@ class MultiUGridMesh(UGridMesh):
         # get the mesh, should have at least one time step. Assume the mesh does not change
         polydata = self.to_pyvista(varname=varname, time_index=0)
 
-        data_ptr = None
+        # set the data_ptr to either point or cell data
+        # try cell data first
         data_ptr = polydata.cell_data.get(varname, None)
         if data_ptr is None:
+            # maybe point data?
             data_ptr = polydata.point_data.get(varname, None)
         if data_ptr is None:
+            # could not find any acceptable staggering
             raise RuntimeError(f'ERROR could not find data {varname}')
-
-        data_list = [m._readField(varname=varname, time_index=0) for m in self.meshes]
 
         plotter = pv.Plotter(off_screen=True)
         plotter.open_movie(moviefile)
@@ -72,13 +84,8 @@ class MultiUGridMesh(UGridMesh):
         for time_index in range(t0, t1):
             print(f'time index {time_index}')
             plotter.clear()
-            # iterate over meshes
-            for i in range(len(self.meshes)):
-                m = self.meshes[i]
-                # read the data
-                data_list[i][:] = m._readField(varname=varname, time_index=time_index)
-            # merge the data
-            data_ptr[:] = np.concatenate(data_list)
+            # read and set the field values
+            data_ptr[:] = self.readField(varname=varname, time_index=time_index)
             plotter.add_mesh(polydata, scalars=varname, clim=clim)
             plotter.write_frame()
         plotter.close()

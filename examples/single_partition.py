@@ -1,4 +1,4 @@
-from Delft3D_RunMonitor.ugrid_mesh import UGridMesh
+from Delft3D_RunMonitor import UGridMesh
 import defopt
 
 def main(*, mapname: str='FlowFM_0000_map.nc', varname: str="mesh2d_waterdepth", time_index: int=0):
