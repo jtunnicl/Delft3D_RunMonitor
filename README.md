@@ -128,3 +128,12 @@ python examples/plot.py "data/*_map.nc" --output images/frame.png
 # Export each frame as a VTK mesh
 python examples/plot.py "data/*_map.nc" --output mesh.stl
 ```
+
+### Velocity quiver overlay
+
+Overlay velocity vectors (arrows) on top of a water-depth plot using
+`mesh2d_ucx` / `mesh2d_ucy`.
+
+```bash
+python examples/quiver_plot.py data/FlowFM_*_map.nc
+```

@@ -2,8 +2,12 @@
 
 Classes
 -------
+Overlay
+    Abstract base class for PlotView overlays.
 CrossSectionOverlay
-    Load cross-section lines once; add them to any plotter subplot.
+    Static cross-section lines; derives from Overlay.
+QuiverOverlay
+    Time-varying velocity arrow glyphs; derives from Overlay.
 PlotView
     Describe a single panel: which mesh, which field, and how to colour it.
 Viewer
@@ -181,28 +185,93 @@ def export_frames(output, time_indices, update_frame, mesh, plotter):
         elif ext in MESH_FORMATS:
             mesh.save(str(path))
 
+class Overlay:
+    """Abstract base class for PlotView overlays.
+
+    Subclasses must implement :meth:`add_to`.
+
+    Parameters
+    ----------
+    is_dynamic:
+        ``True`` if the overlay needs to update each frame.
+    """
+
+    is_dynamic: bool = False
+
+    def add_to(self, plotter: pv.Plotter, time_index: int = None) -> None:
+        raise NotImplementedError
+
 
 # --------------------------------------------------------------------------- #
 # CrossSectionOverlay                                                          #
 # --------------------------------------------------------------------------- #
 
-class CrossSectionOverlay:
+class CrossSectionOverlay(Overlay):
     """Cross-section lines loaded once and reusable across any PlotView.
 
     Parameters
     ----------
     xs_file:
         Path to cross-section coordinate file (pairs of easting/northing rows).
-    z:
-        Elevation at which to draw the lines.
     """
 
-    def __init__(self, xs_file: str, z: float = 0.0):
-        self._mesh, self._names = _load_cross_sections(xs_file, z=z)
+    def __init__(self, xs_file: str):
+        self._mesh, self._names = _load_cross_sections(xs_file)
 
-    def add_to(self, plotter: pv.Plotter) -> None:
+    def add_to(self, plotter: pv.Plotter, time_index: int = None) -> None:
         """Add the overlay to the *active* subplot of *plotter*."""
         _draw_cross_sections(plotter, self._mesh, self._names)
+
+
+# --------------------------------------------------------------------------- #
+# QuiverOverlay                                                                #
+# --------------------------------------------------------------------------- #
+
+class VelocityOverlay(Overlay):
+    """Velocity vector overlay rendered at face centres.
+
+    Reads ``mesh2d_ucx`` / ``mesh2d_ucy`` (face-centred Cartesian components).
+    Use *downsample* to keep the arrow count manageable.
+
+    Parameters
+    ----------
+    mesh:
+        A ``UGridMesh`` or ``MultiUGridMesh`` instance.
+    scale:
+        Arrow length multiplier (metres of arrow per m/s of flow).
+    downsample:
+        Plot every *downsample*-th face.
+    """
+
+    is_dynamic: bool = True
+
+    def __init__(self, mesh, scale: float = 10.0, 
+                 color: str = 'red',
+                 downsample: int = 100):
+        self.mesh    = mesh
+        self.scale   = scale
+        self.color   = color
+        self.downsample  = downsample
+
+        meshes = mesh.meshes if hasattr(mesh, 'meshes') else [mesh]
+        fc_x = np.concatenate([m.nc.variables['mesh2d_face_x'][:] for m in meshes])
+        fc_y = np.concatenate([m.nc.variables['mesh2d_face_y'][:] for m in meshes])
+
+        self._idx = np.arange(0, len(fc_x), downsample)
+        n = len(self._idx)
+        pts = np.column_stack([fc_x[self._idx], fc_y[self._idx], np.zeros(n)])
+        self._polydata = pv.PolyData(pts)
+        self._polydata.point_data['_vel'] = np.zeros((n, 3), dtype=float)
+
+    def add_to(self, plotter: pv.Plotter, time_index: int = None) -> None:
+        if time_index is not None:
+            ux = self.mesh.readField('mesh2d_ucx', time_index)[self._idx]
+            uy = self.mesh.readField('mesh2d_ucy', time_index)[self._idx]
+            self._polydata.point_data['_vel'][:, 0] = ux
+            self._polydata.point_data['_vel'][:, 1] = uy
+
+        glyphs = self._polydata.glyph(orient='_vel', scale='_vel', factor=self.scale)
+        plotter.add_mesh(glyphs, color=self.color, name=f'_quiver_{id(self)}')
 
 
 # --------------------------------------------------------------------------- #
@@ -336,13 +405,13 @@ class Viewer:
 
     def __init__(self, views: list, shape: tuple = None,
                  t0: int = 0, t1: int = -1, step: int = 1):
-        self.views = views
-        self.shape = shape or (1, len(views))
-        self.time = views[0].mesh.time
-        self.nt = len(self.time)
-        self.t0 = t0
-        self.t1 = t1
-        self.step = step
+        self.views  = views
+        self.shape  = shape or (1, len(views))
+        self.time   = views[0].mesh.time
+        self.nt     = len(self.time)
+        self.t0     = t0
+        self.t1     = t1
+        self.step   = step
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -352,13 +421,13 @@ class Viewer:
         for view in self.views:
             view._init_polydata()
 
-    def _add_view_to_subplot(self, pl: pv.Plotter, idx: int, view) -> None:
+    def _add_view_to_subplot(self, pl: pv.Plotter, idx: int, view,
+                             time_index: int = 0) -> None:
         """Activate subplot *idx*, add *view*'s mesh, overlays, and title label."""
         row, col = divmod(idx, self.shape[1])
         pl.subplot(row, col)
 
-        # PyVista keys scalar bars by title; inject a unique one per view so
-        # each panel's bar is stored separately.
+        # Use a unique internal title so PyVista keys each panel's bar separately.
         sb_args = dict(view.scalar_bar_args)
         sb_args.setdefault('title', f'_view_{idx}')
         pl.add_mesh(
@@ -369,27 +438,20 @@ class Viewer:
             scalar_bar_args=sb_args,
             **view.mesh_kwargs,
         )
-        try:
-            actor = pl.scalar_bars[sb_args['title']]
-            # Switch to panel-relative coordinates so position_x/y in
-            # scalar_bar_args are interpreted within this subplot, not the window.
-            actor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
-            actor.GetPosition2Coordinate().SetCoordinateSystemToNormalizedViewport()
-            actor.SetTitle('')
-        except KeyError:
-            pass
+
+        pl.scalar_bars[sb_args['title']].SetTitle('')
 
         for overlay in view.overlays:
-            overlay.add_to(pl)
+            overlay.add_to(pl, time_index)
 
         if view.title:
             pl.add_text(view.title, position='lower_right',
                         font_size=9, name=f'_bar_title_{idx}')
 
-    def _populate_plotter(self, pl: pv.Plotter):
+    def _populate_plotter(self, pl: pv.Plotter, time_index: int = 0):
         """Add each view's mesh and overlays to the appropriate subplot."""
         for idx, view in enumerate(self.views):
-            self._add_view_to_subplot(pl, idx, view)
+            self._add_view_to_subplot(pl, idx, view, time_index)
         pl.link_views()
         self._setup_camera(pl)
 
@@ -403,7 +465,7 @@ class Viewer:
         pl.clear()
         for idx, view in enumerate(self.views):
             view._update(ti)
-            self._add_view_to_subplot(pl, idx, view)
+            self._add_view_to_subplot(pl, idx, view, ti)
 
     def _clamp_time_range(self, t0: int, t1: int) -> tuple:
         """Resolve negative indices and clamp to valid range."""
@@ -432,7 +494,7 @@ class Viewer:
             view._update(t0)
 
         pl = pv.Plotter(shape=self.shape)
-        self._populate_plotter(pl)
+        self._populate_plotter(pl, t0)
 
         ti = t0
         running = False
@@ -442,6 +504,11 @@ class Viewer:
             ti = max(t0, min(t1 - 1, new_ti))
             for view in self.views:
                 view._update(ti)
+                for overlay in view.overlays:
+                    if overlay.is_dynamic:
+                        row, col = divmod(self.views.index(view), self.shape[1])
+                        pl.subplot(row, col)
+                        overlay.add_to(pl, ti)
             pl.add_text(
                 f"t = {ti} / {self.nt - 1}",
                 position='upper_left', font_size=12, name='_time_label',
@@ -547,6 +614,7 @@ class Viewer:
         elapsed = _time.time() - tic
         print(f"Wrote {nframes} frame(s) to {outfile} "
               f"in {elapsed:.1f}s ({elapsed / max(nframes, 1):.2f}s/frame)")
+
 
     def export_movie(self, outfile: str = 'animation.mp4', t0: int = 0, t1: int = -1):
         """Write an MP4 covering time steps *t0* up to (but not including) *t1*.
