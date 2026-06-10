@@ -30,9 +30,7 @@ import numpy as np
 import pyvista as pv
 
 
-# --------------------------------------------------------------------------- #
 # Format sets                                                                  #
-# --------------------------------------------------------------------------- #
 
 IMAGE_FORMATS     = {'.png', '.jpg', '.jpeg'}
 MESH_FORMATS      = {'.stl', '.vtp', '.vtk', '.ply', '.obj'}
@@ -50,9 +48,7 @@ DEFAULT_SCALAR_BAR = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# Cross-section helpers                                                        #
-# --------------------------------------------------------------------------- #
+# Cross-section helpers
 
 def _load_cross_sections(xs_file: str, z: float = 0.0) -> tuple:
     """Parse *xs_file* into a PyVista line mesh and a list of section names.
@@ -137,9 +133,7 @@ def add_cross_sections(pl: pv.Plotter, xs_file: str, z: float = 0.0) -> None:
     _draw_cross_sections(pl, mesh, names)
 
 
-# --------------------------------------------------------------------------- #
-# Low-level export helper                                                      #
-# --------------------------------------------------------------------------- #
+# Low-level export helper
 
 def export_frames(output, time_indices, update_frame, mesh, plotter):
     """Dispatch frame export based on *output* file extension.
@@ -201,11 +195,6 @@ class Overlay:
     def add_to(self, plotter: pv.Plotter, time_index: int = None) -> None:
         raise NotImplementedError
 
-
-# --------------------------------------------------------------------------- #
-# CrossSectionOverlay                                                          #
-# --------------------------------------------------------------------------- #
-
 class CrossSectionOverlay(Overlay):
     """Cross-section lines loaded once and reusable across any PlotView.
 
@@ -222,11 +211,6 @@ class CrossSectionOverlay(Overlay):
         """Add the overlay to the *active* subplot of *plotter*."""
         _draw_cross_sections(plotter, self._mesh, self._names)
 
-
-# --------------------------------------------------------------------------- #
-# QuiverOverlay                                                                #
-# --------------------------------------------------------------------------- #
-
 class VelocityOverlay(Overlay):
     """Velocity vector overlay rendered at face centres.
 
@@ -239,6 +223,8 @@ class VelocityOverlay(Overlay):
         A ``UGridMesh`` or ``MultiUGridMesh`` instance.
     scale:
         Arrow length multiplier (metres of arrow per m/s of flow).
+    color:
+        Color for plot quiver.
     downsample:
         Plot every *downsample*-th face.
     """
@@ -246,7 +232,7 @@ class VelocityOverlay(Overlay):
     is_dynamic: bool = True
 
     def __init__(self, mesh, scale: float = 10.0, 
-                 color: str = 'red',
+                 color: str = 'white',
                  downsample: int = 100):
         self.mesh    = mesh
         self.scale   = scale
@@ -273,10 +259,6 @@ class VelocityOverlay(Overlay):
         glyphs = self._polydata.glyph(orient='_vel', scale='_vel', factor=self.scale)
         plotter.add_mesh(glyphs, color=self.color, name=f'_quiver_{id(self)}')
 
-
-# --------------------------------------------------------------------------- #
-# PlotView                                                                     #
-# --------------------------------------------------------------------------- #
 
 class PlotView:
     """A single panel in a Viewer.
@@ -371,10 +353,6 @@ class PlotView:
         self._data_ptr[:] = self.get_field(time_index)
 
 
-# --------------------------------------------------------------------------- #
-# Viewer                                                                      #
-# --------------------------------------------------------------------------- #
-
 class Viewer:
     """Arrange PlotViews in a subplot grid and drive the interactive loop.
 
@@ -412,10 +390,6 @@ class Viewer:
         self.t0     = t0
         self.t1     = t1
         self.step   = step
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
 
     def _init_views(self):
         for view in self.views:
@@ -460,36 +434,43 @@ class Viewer:
         pl.view_xy()
         pl.camera.parallel_projection = True
 
-    def _render_frame(self, pl: pv.Plotter, ti: int) -> None:
-        """Clear *pl* and redraw all views at time index *ti*."""
-        pl.clear()
+    def _update_frame(self, pl: pv.Plotter, ti: int) -> None:
+        """Update all views and dynamic overlays in-place at time index *ti*."""
         for idx, view in enumerate(self.views):
             view._update(ti)
-            self._add_view_to_subplot(pl, idx, view, ti)
+            dynamic = [o for o in view.overlays if o.is_dynamic]
+            if dynamic:
+                row, col = divmod(idx, self.shape[1])
+                pl.subplot(row, col)
+                for overlay in dynamic:
+                    overlay.add_to(pl, ti)
 
     def _clamp_time_range(self, t0: int, t1: int) -> tuple:
-        """Resolve negative indices and clamp to valid range."""
-        nt = self.nt
-        if t1 < 0:
-            t1 = nt + t1
-        return max(0, t0), min(nt, t1)
+        """Resolve negative indices and clamp to valid range.
 
-    # ------------------------------------------------------------------ #
-    # Public interface                                                     #
-    # ------------------------------------------------------------------ #
+        Both t0 and t1 are inclusive time indices.
+        """
+        if t1 < 0:
+            t1 = self.nt + t1
+        return max(0, t0), min(self.nt - 1, t1)
 
     def show(self):
-        """Open an interactive window with keyboard time-stepping.
+        """Open an interactive viewer alongside a slider window for time navigation.
 
         Uses the *t0*, *t1*, and *step* values set on the Viewer.
-        ``s`` / ``e`` jump to the first / last frame in the configured range;
-        ``t`` advances by *step*; ``r`` runs continuously; ``space`` pauses.
+
+        Keyboard controls (in the viewer window)
+        -----------------------------------------
+        Right / Left    Step forward / backward by *step* frames.
+        Home / End      Jump to first / last frame.
+        Space           Toggle play / pause.
         """
+        import tkinter as tk
+
         t0, t1 = self._clamp_time_range(self.t0, self.t1)
         step = self.step
 
         self._init_views()
-        # Advance views to the starting frame before populating the plotter.
         for view in self.views:
             view._update(t0)
 
@@ -499,42 +480,64 @@ class Viewer:
         ti = t0
         running = False
 
+        root = tk.Tk()
+        root.title(f'{t0} / {t1}')
+        root.resizable(True, False)
+        slider_var = tk.IntVar(value=t0)
+
         def _go(new_ti):
             nonlocal ti
-            ti = max(t0, min(t1 - 1, new_ti))
-            for view in self.views:
-                view._update(ti)
-                for overlay in view.overlays:
-                    if overlay.is_dynamic:
-                        row, col = divmod(self.views.index(view), self.shape[1])
-                        pl.subplot(row, col)
-                        overlay.add_to(pl, ti)
-            pl.add_text(
-                f"t = {ti} / {self.nt - 1}",
-                position='upper_left', font_size=12, name='_time_label',
-            )
+            clamped = max(t0, min(t1, new_ti))
+            if clamped == ti:
+                return
+            ti = clamped
+            self._update_frame(pl, ti)
+            slider_var.set(ti)
+            root.title(f'{ti} / {t1}')
             pl.render()
 
-        def _run():
+        def _toggle():
             nonlocal running
-            running = True
-            while running and ti < t1 - 1:
-                _go(ti + step)
-                pl.update(100)
+            if running:
+                running = False
+            else:
+                running = True
+                while running and ti < t1:
+                    _go(ti + step)
+                    pl.update(100)
+                running = False
 
-        def _stop():
-            nonlocal running
-            running = False
+        tk.Scale(root, from_=t0, to=t1, orient='horizontal',
+                 variable=slider_var, resolution=1,
+                 command=lambda v: _go(int(v))).pack(fill='x', padx=8, pady=4)
 
-        pl.add_key_event('t',     lambda: _go(ti + step))
-        pl.add_key_event('s',     lambda: _go(t0))
-        pl.add_key_event('e',     lambda: _go(t1 - 1))
-        pl.add_key_event('r',     _run)
-        pl.add_key_event('space', _stop)
+        pl.add_key_event('Right', lambda: _go(ti + step))
+        pl.add_key_event('Left',  lambda: _go(ti - step))
+        pl.add_key_event('Home',  lambda: _go(t0))
+        pl.add_key_event('End',   lambda: _go(t1))
+        pl.add_key_event('space', _toggle)
 
-        pl.add_text(f"t = {t0} / {self.nt - 1}",
-                    position='upper_left', font_size=12, name='_time_label')
+        def _close():
+            try:
+                pl.close()
+            except Exception:
+                pass
+
+        root.protocol('WM_DELETE_WINDOW', _close)
+        pl.add_key_event('q', _close)
+
+        # Drive tkinter event processing from a VTK repeating timer so the
+        # slider window stays responsive even when the viewer has focus.
+        iren = pl.iren.interactor
+        iren.AddObserver('TimerEvent', lambda obj, event: root.update())
+        iren.CreateRepeatingTimer(50)
+
+        root.update()  # render the tkinter window before the viewer opens
         pl.show()
+        try:
+            root.destroy()
+        except Exception:
+            pass
 
     def export(self, outfile: str = 'animation.mp4',
                t0: int = None, t1: int = None, step: int = None):
@@ -557,13 +560,14 @@ class Viewer:
             First time index (inclusive).  Defaults to the value set on the
             Viewer.  Negative values count from the end.
         t1:
-            Last time index (exclusive).  Defaults to the value set on the
+            Last time index (inclusive).  Defaults to the value set on the
             Viewer.  ``-1`` means the final time step.
         step:
             Frame stride.  Defaults to the value set on the Viewer.
         """
         path = Path(outfile)
         ext = path.suffix.lower()
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         if ext not in ANIMATION_FORMATS | IMAGE_FORMATS | MESH_FORMATS:
             raise ValueError(
@@ -576,16 +580,15 @@ class Viewer:
         step = self.step if step is None else step
 
         t0, t1 = self._clamp_time_range(t0, t1)
-        nframes = len(range(t0, t1, step))
+        nframes = len(range(t0, t1 + 1, step))
 
         self._init_views()
         tic = _time.time()
 
         pl = pv.Plotter(shape=self.shape, off_screen=True)
-
-        # Render one frame so the plotter has bounds before setting camera.
-        self._render_frame(pl, t0)
-        self._setup_camera(pl)
+        for view in self.views:
+            view._update(t0)
+        self._populate_plotter(pl, t0)
 
         if ext in ANIMATION_FORMATS:
             if ext in GIF_FORMATS:
@@ -593,40 +596,22 @@ class Viewer:
             else:
                 pl.open_movie(str(path))
 
-            for ti in range(t0, t1, step):
-                self._render_frame(pl, ti)
+            for ti in range(t0, t1 + 1, step):
+                self._update_frame(pl, ti)
                 pl.write_frame()
 
-            pl.close()
-
         else:  # IMAGE_FORMATS or MESH_FORMATS
-            for i, ti in enumerate(range(t0, t1, step)):
+            for i, ti in enumerate(range(t0, t1 + 1, step)):
                 dest = (path if nframes == 1
-                        else path.parent / f"{path.stem}_{i:04d}{path.suffix}")
-                self._render_frame(pl, ti)
+                        else path.parent / f"{path.stem}_{i:04d}{ext}")
+                self._update_frame(pl, ti)
                 if ext in IMAGE_FORMATS:
                     pl.screenshot(str(dest))
                 else:
                     pv.merge([v._polydata for v in self.views]).save(str(dest))
 
-            pl.close()
+        pl.close()
 
         elapsed = _time.time() - tic
         print(f"Wrote {nframes} frame(s) to {outfile} "
               f"in {elapsed:.1f}s ({elapsed / max(nframes, 1):.2f}s/frame)")
-
-
-    def export_movie(self, outfile: str = 'animation.mp4', t0: int = 0, t1: int = -1):
-        """Write an MP4 covering time steps *t0* up to (but not including) *t1*.
-
-        .. deprecated::
-            Use :meth:`export` instead, which supports all output formats::
-
-                viewer.export('animation.mp4', t0=t0, t1=t1)
-        """
-        warnings.warn(
-            "Viewer.export_movie() is deprecated; use Viewer.export() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.export(outfile, t0=t0, t1=t1)
